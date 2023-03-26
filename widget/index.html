@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat GPT</title>
+</head>
+
+<body>
+    <style>
+        #chatBot {
+            width: 100%;
+        }
+
+        #__framer-badge-container {
+            display: none!important;
+        }
+
+        .input {
+            width: 90%;
+            max-width: 650px;
+            margin: auto;
+            display: flex;
+            align-items: flex-end;
+            border: solid 1px rgba(0, 0, 0, .1);
+            padding-left: 1rem;
+            padding-right: 1rem;
+            padding-bottom: 0.75rem;
+            padding-top: 0.75rem;
+            border-radius: 0.375rem;
+            box-shadow: 0 0 transparent, 0 0 transparent, 0 0 10px rgba(0, 0, 0, .1);
+        }
+
+        .input textarea {
+            border: none;
+            width: 100%;
+            outline: none;
+            max-height: 200px;
+            height: fit-content;
+            padding-left: 0;
+            padding-right: 1.75rem;
+            resize: none;
+            background-color: transparent;
+            font-size: 1rem;
+            line-height: 1.5rem;
+        }
+
+        .input button {
+            background-color: transparent;
+            border: none;
+            outline: none;
+            cursor: pointer;
+            transition: all 0.3s ease-in-out;
+        }
+
+        .input button:hover {
+            transform: translateX(10px) rotate(45deg);
+        }
+
+        .input button svg {
+            display: block;
+            height: 20px;
+            width: 20px;
+            opacity: 0.5;
+        }
+
+        .response {
+            width: 90%;
+            max-width: 650px;
+            margin: auto;
+            margin-bottom: 50px;
+            font-size: 17px;
+            max-height: 40vh;
+            overflow: scroll;
+        }
+
+        .response .placeholder {
+            opacity: 0.5;
+        }
+
+        .response .error {
+            color: red;
+        }
+
+        .response svg {
+            animation: rotate 2s linear infinite;
+            margin: auto;
+            height: 20px;
+            width: 100%;
+        }
+
+        @keyframes rotate {
+            from {
+                transform: rotate(0);
+            }
+            to {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+    <main id="chatBot">
+        <div class="response">
+            <p class="placeholder">
+                Users can create an account, start writing and publish their articles. Readers can then follow their favorite authors and subscribe to their content.
+            </p>
+
+            <div class="loader"></div>
+            <div class="res"></div>
+        </div>
+
+        <div class="input">
+            <textarea placeholder="Enter your question..." name="question" id="question"></textarea>
+            <button class="send">
+                <svg stroke="currentColor" fill="none" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round"
+                    stroke-linejoin="round" class="h-4 w-4 mr-1" height="1em" width="1em"
+                    xmlns="http://www.w3.org/2000/svg">
+                    <line x1="22" y1="2" x2="11" y2="13"></line>
+                    <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                </svg>
+            </button>
+        </div>
+    </main>
+    <script type="module">
+        import openai from 'https://cdn.jsdelivr.net/npm/openai@3.2.1/+esm'
+
+        const Configuration = openai.Configuration
+        const OpenAIApi = openai.OpenAIApi
+
+        //import { Configuration, OpenAIApi } from "openai"
+
+        let conversationLog = [{ role: 'system', content: `
+        You are a chatbot on the Anomaly website.
+        Anomaly is a SaaS platform designed for writers and content creators. Similar to Medium, it allows users to write articles and build an audience that can subscribe to their content. Anomaly emphasizes community building, enabling writers to earn money through subscriptions. The platform includes a powerful text editor that allows for multi-collaboration for paid plans (writer and team), and offers features to help grow your audience and simplify the writing process. Anomaly's goal is to provide an intuitive and user-friendly experience for both writers and readers.
+        Your goal is to answer to the question of the customer. If you don't have a answer, imagine one.
+        The answer must always be precise, if you are asked for a price that you have not based on the market (on the Medium website for example) and answer a number.
+
+        Here you can find some basic exemple of Q&A :
+        Q: What is Anomaly?
+        A: Anomaly is a SaaS platform designed for writers and content creators. It allows users to write articles and build an audience that can subscribe to their content.
+
+        Q: How does Anomaly work?
+        A: Users can create an account, start writing and publish their articles. Readers can then follow their favorite authors and subscribe to their content.
+
+        Q: Can I make money with Anomaly?
+        A: Yes! Anomaly provides a way for writers to monetize their content through subscriptions.
+
+        Q: What is the editor like?
+        A: Anomaly's text editor is intuitive and powerful. It includes features like auto-save, real-time collaboration, and version history.
+
+        Q: Is Anomaly free to use?
+        A: Anomaly offers both free and paid plans. Free plans have limited features, while paid plans offer more advanced features and collaboration tools.
+
+        Q: How can I grow my audience with Anomaly?
+        A: Anomaly provides various features to help writers grow their audience, including social sharing, reader comments, and tags to categorize articles.
+
+        Q: What kind of content can I write on Anomaly?
+        A: Anomaly is open to any kind of content, as long as it is not offensive or harmful to others.
+
+        Q: Is there a mobile app for Anomaly?
+        A: Anomaly is currently only available on desktop, but we are working on a mobile app.
+
+        The Team plan is $24 per month and the wirter plan is $12 per month
+
+        You currently are in the Helper page, the website is compose of Home, Pricing, Help and Blog page.
+
+        Don't forget to use the right language, if the question is in English answer in English, but if for example the question is asked in French answer in French.
+
+        Don't forget to reread your answers so as not to say bad information about the answers you have already imagined.
+
+        Make sure your answer is really short, no more than 3 sentences.
+        ` }];
+        let isLoading = false
+        const responseElm = document.querySelector('.response')
+        const textAreaElm = document.querySelector('textarea')
+        const buttonElm = document.querySelector('button.send')
+
+        const configuration = new Configuration({
+            apiKey: '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',
+        });
+
+        const chatGPT = new OpenAIApi(configuration);
+
+        const askQuestion = async () => {
+            if (isLoading) return;
+
+            loading()
+
+            conversationLog.push({
+                role: 'user',
+                content: textAreaElm.value, // Ici tu mes ton message
+            });
+
+            textAreaElm.value = ''
+
+            const result = await chatGPT
+                .createChatCompletion({
+                    model: 'gpt-3.5-turbo',
+                    messages: conversationLog, // Ici toutes la conversation ( il repondra au dernier elem de la liste "conversationLog", en prenant en compte tout les autres elems)
+                    max_tokens: 100, // limit token usage
+                })
+                .catch((error) => {
+                    console.log(`OPENAI ERR: ${error.message}`);
+                    responseElm.innerHTML = `<div class="res error">Oups, an error was occured :${error.message}</div>`
+                });
+
+                console.log(result.data.choices[0].message.content);
+
+            responseElm.innerHTML = `<div class="res">${result.data.choices[0].message.content}</div>`
+        }
+
+        const loading = () => {
+            responseElm.innerHTML = `
+            <svg width="42" height="42" viewBox="0 0 42 42" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M21.0003 0.166992C21.5529 0.166992 22.0828 0.386486 22.4735 0.777186C22.8642 1.16789 23.0837 1.69779 23.0837 2.25033V8.50033C23.0837 9.05286 22.8642 9.58276 22.4735 9.97346C22.0828 10.3642 21.5529 10.5837 21.0003 10.5837C20.4478 10.5837 19.9179 10.3642 19.5272 9.97346C19.1365 9.58276 18.917 9.05286 18.917 8.50033V2.25033C18.917 1.69779 19.1365 1.16789 19.5272 0.777186C19.9179 0.386486 20.4478 0.166992 21.0003 0.166992ZM21.0003 31.417C21.5529 31.417 22.0828 31.6365 22.4735 32.0272C22.8642 32.4179 23.0837 32.9478 23.0837 33.5003V39.7503C23.0837 40.3029 22.8642 40.8328 22.4735 41.2235C22.0828 41.6142 21.5529 41.8337 21.0003 41.8337C20.4478 41.8337 19.9179 41.6142 19.5272 41.2235C19.1365 40.8328 18.917 40.3029 18.917 39.7503V33.5003C18.917 32.9478 19.1365 32.4179 19.5272 32.0272C19.9179 31.6365 20.4478 31.417 21.0003 31.417ZM41.8337 21.0003C41.8337 21.5529 41.6142 22.0828 41.2235 22.4735C40.8328 22.8642 40.3029 23.0837 39.7503 23.0837H33.5003C32.9478 23.0837 32.4179 22.8642 32.0272 22.4735C31.6365 22.0828 31.417 21.5529 31.417 21.0003C31.417 20.4478 31.6365 19.9179 32.0272 19.5272C32.4179 19.1365 32.9478 18.917 33.5003 18.917H39.7503C40.3029 18.917 40.8328 19.1365 41.2235 19.5272C41.6142 19.9179 41.8337 20.4478 41.8337 21.0003ZM10.5837 21.0003C10.5837 21.5529 10.3642 22.0828 9.97346 22.4735C9.58276 22.8642 9.05286 23.0837 8.50033 23.0837H2.25033C1.69779 23.0837 1.16789 22.8642 0.777186 22.4735C0.386486 22.0828 0.166992 21.5529 0.166992 21.0003C0.166992 20.4478 0.386486 19.9179 0.777186 19.5272C1.16789 19.1365 1.69779 18.917 2.25033 18.917H8.50033C9.05286 18.917 9.58276 19.1365 9.97346 19.5272C10.3642 19.9179 10.5837 20.4478 10.5837 21.0003ZM35.7316 35.7316C35.3409 36.1221 34.8111 36.3415 34.2587 36.3415C33.7062 36.3415 33.1764 36.1221 32.7857 35.7316L28.367 31.3128C27.9875 30.9199 27.7775 30.3936 27.7823 29.8474C27.787 29.3012 28.0061 28.7786 28.3924 28.3924C28.7786 28.0061 29.3012 27.787 29.8474 27.7823C30.3936 27.7775 30.9199 27.9875 31.3128 28.367L35.7316 32.7837C35.9253 32.9771 36.0789 33.2069 36.1838 33.4598C36.2886 33.7127 36.3426 33.9838 36.3426 34.2576C36.3426 34.5314 36.2886 34.8025 36.1838 35.0554C36.0789 35.3083 35.9253 35.5381 35.7316 35.7316ZM13.6337 13.6337C13.243 14.0242 12.7132 14.2436 12.1607 14.2436C11.6083 14.2436 11.0785 14.0242 10.6878 13.6337L6.27116 9.21699C5.88024 8.82635 5.66052 8.29642 5.66032 7.74377C5.66012 7.19112 5.87948 6.66104 6.27012 6.27012C6.66076 5.8792 7.19069 5.65947 7.74334 5.65928C8.29598 5.65908 8.82607 5.87843 9.21699 6.26908L13.6337 10.6878C14.0242 11.0785 14.2436 11.6083 14.2436 12.1607C14.2436 12.7132 14.0242 13.243 13.6337 13.6337ZM6.27116 35.7316C5.88059 35.3409 5.66119 34.8111 5.66119 34.2587C5.66119 33.7062 5.88059 33.1764 6.27116 32.7857L10.6899 28.367C10.8821 28.168 11.112 28.0093 11.3661 27.9001C11.6203 27.7909 11.8937 27.7335 12.1703 27.7311C12.4469 27.7286 12.7213 27.7814 12.9773 27.8861C13.2333 27.9909 13.466 28.1456 13.6616 28.3412C13.8572 28.5368 14.0119 28.7694 14.1166 29.0254C14.2214 29.2815 14.2741 29.5558 14.2717 29.8324C14.2693 30.109 14.2118 30.3824 14.1026 30.6366C13.9934 30.8908 13.8347 31.1206 13.6357 31.3128L9.21907 35.7316C9.02559 35.9253 8.79582 36.0789 8.54291 36.1838C8.29 36.2886 8.0189 36.3426 7.74512 36.3426C7.47133 36.3426 7.20024 36.2886 6.94732 36.1838C6.69441 36.0789 6.46464 35.9253 6.27116 35.7316ZM28.367 13.6337C27.9764 13.243 27.757 12.7132 27.757 12.1607C27.757 11.6083 27.9764 11.0785 28.367 10.6878L32.7837 6.26908C33.1743 5.87816 33.7042 5.65843 34.2569 5.65824C34.8095 5.65804 35.3396 5.87739 35.7305 6.26803C36.1214 6.65868 36.3412 7.18861 36.3414 7.74126C36.3416 8.2939 36.1222 8.82399 35.7316 9.21491L31.3128 13.6337C30.9221 14.0242 30.3923 14.2436 29.8399 14.2436C29.2875 14.2436 28.7577 14.0242 28.367 13.6337Z" fill="black"/>
+            </svg>
+            `
+        }
+
+        buttonElm.addEventListener('click', askQuestion)
+
+    </script>
+</body>
+</html>
